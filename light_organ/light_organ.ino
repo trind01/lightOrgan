@@ -1,12 +1,16 @@
 #include <FastLED.h>
 
-#define NUM_LEDS    300
-#define BRIGHTNESS  64
+#define BUFFER_SIZE 60
+uint16_t analog_buffer[BUFFER_SIZE];
+
+#define NUM_LEDS    269
+#define BRIGHTNESS  50
 #define LED_TYPE    WS2812B
 #define COLOR_ORDER GRB
 #define UPDATES_PER_SECOND 100
 
-const byte soundPin = 2;        //Pin for Sound Sensor
+//const byte soundPin = 2;        //Pin for Sound Sensor
+const byte soundPin = A0;       //Pin for Sound Sensor
 const byte LED_PIN = 10;        //Dataline for LED Strip
 const byte modePin = 8;         //Used to determine if in music mode or relax mode
                                 //HIGH = Relax, LOW = Music
@@ -48,15 +52,17 @@ enum MODE{
 };
 MODE mode;
 
+
 ////////////////////////////////////////////////////////////
 /////                        SETUP                      ////
 ////////////////////////////////////////////////////////////
 
 void setup() {
   delay( 3000 ); // power-up safety delay
-  attachInterrupt(digitalPinToInterrupt(soundPin),soundDetected,RISING);
   pinMode(modePin,INPUT);
 
+  for(int i=0;i<BUFFER_SIZE;i++){analog_buffer[i] = analogRead(soundPin);}
+  
   FastLED.addLeds<LED_TYPE, LED_PIN, COLOR_ORDER>(leds, NUM_LEDS).setCorrection( TypicalLEDStrip );
   FastLED.setBrightness(  BRIGHTNESS );
 
@@ -70,7 +76,7 @@ void setup() {
   }
   currentBlending = LINEARBLEND;
   lastIntTime = millis();
-  Serial.begin(9600);
+//  Serial.begin(115200);
 }
 
 ////////////////////////////////////////////////////////////
@@ -78,7 +84,7 @@ void setup() {
 ////////////////////////////////////////////////////////////
 
 void loop() {
-  
+  static long fft_debounce = millis();
   static uint8_t start_index = 0;
   start_index = start_index + move_speed; //Move the LEDS
   
@@ -86,12 +92,36 @@ void loop() {
   
   FastLED.show();
   FastLED.delay(1000 / UPDATES_PER_SECOND);
+
+  if(newPeak())
+  {
+    if(millis() - fft_debounce > 300){
+      soundDetected();
+      fft_debounce = millis();
+    }
+  }
+}
+
+bool newPeak()
+{
+  static int pos = 0;
+  int newVal = analogRead(soundPin);
+//  Serial.println(newVal);
+  double avg = 0;
+  for(int i=0;i<BUFFER_SIZE;i++)
+  {
+    avg += analog_buffer[i];
+  }
+  avg = avg/BUFFER_SIZE;
+  analog_buffer[pos] = newVal;
+  pos = (pos+1)%BUFFER_SIZE;
+  return( abs((double)newVal-avg) > 3);
 }
 
 //Change the LED's colors from palette
 void FillLEDsFromPaletteColors( uint8_t colorIndex)
 {
-  uint8_t brightness = 255;
+  uint8_t brightness = 200;
   for( int i = 0; i < NUM_LEDS; i++) {
       leds[i] = ColorFromPalette( currentPalette, colorIndex, brightness, currentBlending);
       colorIndex += 3;
@@ -119,7 +149,7 @@ void soundDetected()
   //Time of Interrupt
   unsigned long timeNow = millis();
   detection_count++;
-  Serial.println(detection_count);
+//  Serial.println(detection_count);
   if((timeNow - lastIntTime > 100 && timeNow - lastIntTime < 500) && !pat1_flag ){
     if(curr_alt_pal){currentPalette = alt2_palette1_p;}
     else{currentPalette = alt2_palette2_p;}
@@ -131,9 +161,9 @@ void soundDetected()
       pattern1_started = false;
       pat1_flag = true;
       if(pat2_flag){endOfBothPats = millis();}
-      Serial.println("DONE PAT 1");
+//      Serial.println("DONE PAT 1");
     }
-    Serial.println("DOING PAT 1");
+//    Serial.println("DOING PAT 1");
   }
   
   else if((timeNow - lastIntTime > 500 && timeNow - lastIntTime < 700) && !pat2_flag){
@@ -147,22 +177,22 @@ void soundDetected()
       pattern2_started = false;
       pat2_flag = true;
       if(pat1_flag){endOfBothPats = millis();}
-      Serial.println("DONE PAT 2");
+//      Serial.println("DONE PAT 2");
     }
-    Serial.println("DOING PAT 2");
+//    Serial.println("DOING PAT 2");
   }
   //((pat1_flag && pat2_flag) && (timeNow - lastIntTime > 300 && timeNow - lastIntTime < 2000))
   else if((timeNow - lastIntTime > 700 && timeNow - lastIntTime < 1500) || ((pat1_flag && pat2_flag) && (timeNow - lastIntTime > 100 && timeNow - lastIntTime < 2000))){
     move_speed = 1;
     randomPalette();
-    Serial.println("RANDO");
+//    Serial.println("RANDO");
   }
   else if((timeNow - lastIntTime > 1500 && timeNow - lastIntTime < 2500) || ((pat1_flag && pat2_flag) && (timeNow - lastIntTime > 2000 && timeNow - lastIntTime < 4000))){
     randomStripes(detection_count % 4);
-    Serial.println("STRIPES");
+//    Serial.println("STRIPES");
   }
   else if(timeNow -lastIntTime > 4000 || ((pat1_flag && pat2_flag) && (timeNow - lastIntTime > 4000))){
-    Serial.println("ONE PAL");
+//    Serial.println("ONE PAL");
     if(random8() > 127){
       currentPalette = bright_colors_p;
       currentBlending = LINEARBLEND;
