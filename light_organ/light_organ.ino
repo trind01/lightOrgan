@@ -1,6 +1,6 @@
 #include <FastLED.h>
 
-#define BUFFER_SIZE 60
+#define BUFFER_SIZE 30
 uint16_t analog_buffer[BUFFER_SIZE];
 
 #define NUM_LEDS    269
@@ -96,6 +96,7 @@ void loop() {
   if(newPeak())
   {
     if(millis() - fft_debounce > 300){
+      Serial.println("SOUND DETECTED");
       soundDetected();
       fft_debounce = millis();
     }
@@ -106,7 +107,6 @@ bool newPeak()
 {
   static int pos = 0;
   int newVal = analogRead(soundPin);
-//  Serial.println(newVal);
   double avg = 0;
   for(int i=0;i<BUFFER_SIZE;i++)
   {
@@ -115,7 +115,12 @@ bool newPeak()
   avg = avg/BUFFER_SIZE;
   analog_buffer[pos] = newVal;
   pos = (pos+1)%BUFFER_SIZE;
-  return( abs((double)newVal-avg) > 3);
+  if(mode == RELAX) {
+    return( abs((double)newVal-avg) > 3);
+  }
+  else {
+    return( abs((double)newVal-avg) > 1);
+  }
 }
 
 //Change the LED's colors from palette
